@@ -1,0 +1,36 @@
+# SADS Gitattributes
+
+# Set default behavior to automatic text conversion
+* text=auto
+
+# Explicitly declare files that are always LF (Linux/Mac/Containers)
+*.sh text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+Dockerfile* text eol=lf
+
+# Explicitly declare files that are always CRLF (Windows)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Denote binary files (never merge or convert)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.mp4 binary
+*.fbx binary
+*.obj binary
+*.stl binary
+*.unitypackage binary
+*.dll binary
+*.so binary
+*.dylib binary

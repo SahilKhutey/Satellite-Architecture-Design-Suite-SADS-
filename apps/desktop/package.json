@@ -1,0 +1,16 @@
+{
+  "name": "sads-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SADS Desktop App (Electron Wrapper)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^25.0.0",
+    "electron-builder": "^24.4.0"
+  }
+}

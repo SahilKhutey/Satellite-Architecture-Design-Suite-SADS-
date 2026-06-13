@@ -1,0 +1,9 @@
+Satellite Architecture Design Suite (SADS)
+Copyright 2026 SADS Contributors
+
+This product includes software developed by the SADS community (https://github.com/sads-aero/satellite-architecture-design-suite).
+
+This product utilizes third-party scientific computing packages:
+* NumPy (https://numpy.org/) - licensed under the BSD 3-Clause License.
+* SciPy (https://scipy.org/) - licensed under the BSD 3-Clause License.
+* FastAPI (https://fastapi.tiangolo.com/) - licensed under the MIT License.

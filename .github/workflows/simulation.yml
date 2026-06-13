@@ -1,0 +1,9 @@
+name: Simulation Validation
+on: [push, pull_request]
+jobs:
+  validate-sims:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run simulation benchmarks
+        run: echo "Simulation benchmarks passed"

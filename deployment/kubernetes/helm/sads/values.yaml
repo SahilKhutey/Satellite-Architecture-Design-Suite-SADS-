@@ -1,0 +1,30 @@
+# Default values for SADS microservices.
+replicaCount: 2
+
+image:
+  repository: sads-registry.aero
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+services:
+  gateway:
+    port: 8000
+    targetPort: 8000
+  simulation:
+    port: 8002
+    targetPort: 8002
+  digitalTwin:
+    port: 8005
+    targetPort: 8005
+  aiCopilot:
+    port: 8006
+    targetPort: 8006
+
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts:
+    - host: sads.aero
+      paths:
+        - path: /
+          pathType: Prefix

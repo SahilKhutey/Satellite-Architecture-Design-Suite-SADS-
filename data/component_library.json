@@ -1,0 +1,31 @@
+{
+  "components": {
+    "solar_panels": [
+      {"name": "Spectrolab UTJ", "efficiency": 0.305, "mass_kg_m2": 0.85, "vendor": "Spectrolab"},
+      {"name": "Azur Space 3G30", "efficiency": 0.30, "mass_kg_m2": 0.80, "vendor": "Azur"}
+    ],
+    "batteries": [
+      {"name": "Saft VES16", "capacity_wh_kg": 165, "cell_type": "Li-ion", "dod": 0.30},
+      {"name": "EaglePicher", "capacity_wh_kg": 145, "cell_type": "Li-ion", "dod": 0.25}
+    ],
+    "thrusters": [
+      {"name": "Aerojet MR-103G", "isp_s": 220, "thrust_n": 0.5, "prop_type": "hydrazine", "mass_kg": 0.8},
+      {"name": "Aerojet MR-111C", "isp_s": 220, "thrust_n": 22.0, "prop_type": "hydrazine", "mass_kg": 1.0},
+      {"name": "Busek BHT-200", "isp_s": 1390, "thrust_n": 0.012, "prop_type": "hall_thruster", "mass_kg": 1.0},
+      {"name": "Snecma PPS-1350", "isp_s": 1660, "thrust_n": 0.088, "prop_type": "hall_thruster", "mass_kg": 5.0}
+    ],
+    "antennas": [
+      {"name": "X-Band Patch", "gain_dbi": 6.0, "mass_kg": 0.2, "freq_ghz": 8.4},
+      {"name": "S-Band Helix", "gain_dbi": 12.0, "mass_kg": 0.4, "freq_ghz": 2.2},
+      {"name": "Ka-Band Parabolic 0.3m", "gain_dbi": 35.0, "mass_kg": 1.5, "freq_ghz": 26.5}
+    ],
+    "reaction_wheels": [
+      {"name": "Honeywell HR12", "max_torque_nm": 0.012, "max_momentum_nms": 0.04, "mass_kg": 1.0},
+      {"name": "Sinclair RW-1", "max_torque_nm": 0.030, "max_momentum_nms": 0.10, "mass_kg": 1.5}
+    ],
+    "star_trackers": [
+      {"name": "Sodern HYDRA", "accuracy_arcsec": 5, "mass_kg": 1.2},
+      {"name": "Ball CT-2020", "accuracy_arcsec": 10, "mass_kg": 0.8}
+    ]
+  }
+}

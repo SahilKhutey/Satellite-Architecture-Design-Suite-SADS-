@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use SADS in your research or mission design, please cite it as follows:"
+authors:
+  - name: "SADS Contributors"
+    email: "engineering@sads.aero"
+title: "Satellite Architecture Design Suite (SADS)"
+version: 1.0.0
+date-released: 2026-06-13
+url: "https://github.com/sads-aero/satellite-architecture-design-suite"

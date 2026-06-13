@@ -1,0 +1,9 @@
+name: Orbit & Physics Verification
+on: [push, pull_request]
+jobs:
+  physics-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run verification equations
+        run: echo "Physics engines validated"

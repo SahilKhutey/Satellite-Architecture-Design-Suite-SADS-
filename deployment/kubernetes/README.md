@@ -1,0 +1,1 @@
+# SADS Kubernetes Deployment Assets

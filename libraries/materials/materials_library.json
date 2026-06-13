@@ -1,0 +1,49 @@
+{
+  "materials": [
+    {
+      "name": "Aluminum 6061-T6",
+      "density_kg_m3": 2700.0,
+      "yield_strength_mpa": 276.0,
+      "specific_heat_j_kg_k": 896.0,
+      "thermal_conductivity_w_m_k": 167.0,
+      "solar_absorptivity": 0.38,
+      "infrared_emissivity": 0.09
+    },
+    {
+      "name": "Titanium Ti-6Al-4V",
+      "density_kg_m3": 4430.0,
+      "yield_strength_mpa": 880.0,
+      "specific_heat_j_kg_k": 526.0,
+      "thermal_conductivity_w_m_k": 6.7,
+      "solar_absorptivity": 0.45,
+      "infrared_emissivity": 0.15
+    },
+    {
+      "name": "Carbon Fiber (CFRP)",
+      "density_kg_m3": 1600.0,
+      "yield_strength_mpa": 600.0,
+      "specific_heat_j_kg_k": 700.0,
+      "thermal_conductivity_w_m_k": 5.0,
+      "solar_absorptivity": 0.92,
+      "infrared_emissivity": 0.85
+    },
+    {
+      "name": "Multi-Layer Insulation (MLI)",
+      "density_kg_m3": 120.0,
+      "yield_strength_mpa": 10.0,
+      "specific_heat_j_kg_k": 1000.0,
+      "thermal_conductivity_w_m_k": 0.0005,
+      "solar_absorptivity": 0.14,
+      "infrared_emissivity": 0.05
+    },
+    {
+      "name": "Gold Foil",
+      "density_kg_m3": 19300.0,
+      "yield_strength_mpa": 100.0,
+      "specific_heat_j_kg_k": 129.0,
+      "thermal_conductivity_w_m_k": 318.0,
+      "solar_absorptivity": 0.19,
+      "infrared_emissivity": 0.03
+    }
+  ]
+}

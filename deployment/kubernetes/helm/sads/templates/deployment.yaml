@@ -1,0 +1,37 @@
+{{- range $serviceName, $config := .Values.services }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sads-{{ $serviceName }}
+  labels:
+    app: sads-{{ $serviceName }}
+spec:
+  replicas: {{ $.Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: sads-{{ $serviceName }}
+  template:
+    metadata:
+      labels:
+        app: sads-{{ $serviceName }}
+    spec:
+      containers:
+        - name: {{ $serviceName }}
+          image: "{{ $.Values.image.repository }}/{{ $serviceName }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ $config.targetPort }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sads-{{ $serviceName }}-service
+spec:
+  selector:
+    app: sads-{{ $serviceName }}
+  ports:
+    - protocol: TCP
+      port: {{ $config.port }}
+      targetPort: {{ $config.targetPort }}
+---
+{{- end }}

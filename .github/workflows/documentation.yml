@@ -1,0 +1,29 @@
+name: Documentation Gate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check-docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Verify Documentation Structure
+      run: |
+        test -d docs/core
+        test -d docs/subsystems
+        test -d docs/simulations
+        test -d docs/digital_twin
+        test -d docs/ai
+        test -d docs/mbse
+        test -f docs/core/Architecture.md
+        test -f docs/core/Systems.md
+        test -f docs/core/Engineering.md
+        test -f docs/core/Physics.md
+        test -f docs/core/Mathematics.md
+        test -f docs/core/Workflow.md
+        echo "Documentation structure verified successfully."

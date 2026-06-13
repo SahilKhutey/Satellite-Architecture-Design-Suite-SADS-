@@ -1,0 +1,84 @@
+{
+  "iss": {
+    "name": "International Space Station",
+    "agency": "NASA / International",
+    "altitude_km": 408.0,
+    "inclination_deg": 51.6,
+    "eccentricity": 0.0001,
+    "period_min": 92.68,
+    "mass_kg": 419725,
+    "solar_array_area_m2": 2500,
+    "battery_capacity_kwh": 80,
+    "average_power_kw": 84,
+    "data_source": "NASA ISS Reference Guide"
+  },
+  "hubble": {
+    "name": "Hubble Space Telescope",
+    "agency": "NASA / ESA",
+    "altitude_km": 540,
+    "inclination_deg": 28.5,
+    "eccentricity": 0.00028,
+    "period_min": 95.42,
+    "mass_kg": 11110,
+    "solar_array_area_m2": 60,
+    "pointing_arcsec": 7
+  },
+  "gps_block_iiia": {
+    "name": "GPS Block IIIA",
+    "agency": "USSF",
+    "altitude_km": 20200,
+    "inclination_deg": 55.0,
+    "period_h": 11.97,
+    "mass_kg": 2161,
+    "solar_array_power_w": 4500,
+    "mission_years": 15
+  },
+  "geo_hispasat": {
+    "name": "Hispasat 30W-6",
+    "agency": "Hispasat",
+    "altitude_km": 35786,
+    "inclination_deg": 0.05,
+    "period_h": 23.93,
+    "mass_kg_dry": 4500,
+    "solar_array_power_w": 12000,
+    "mission_years": 15
+  },
+  "starlink_v2": {
+    "name": "Starlink V2",
+    "agency": "SpaceX",
+    "altitude_km": 550,
+    "inclination_deg": 53.0,
+    "period_min": 95.6,
+    "mass_kg": 1250,
+    "solar_array_area_m2": 25,
+    "data_source": "FCC filings"
+  },
+  "jwst": {
+    "name": "James Webb Space Telescope",
+    "agency": "NASA / ESA / CSA",
+    "orbit": "Sun-Earth L2",
+    "l2_distance_km": 1500000,
+    "mass_kg": 6200,
+    "mirror_diameter_m": 6.5,
+    "mission_years": 10
+  },
+  "mro": {
+    "name": "Mars Reconnaissance Orbiter",
+    "agency": "NASA",
+    "orbit": "Mars",
+    "periapsis_km": 250,
+    "apoapsis_km": 316,
+    "inclination_deg": 93,
+    "mass_kg": 2180,
+    "solar_array_area_m2": 30
+  },
+  "cubesat_3u_ao73": {
+    "name": "FUNcube-1 (AO-73)",
+    "agency": "AMSAT-UK",
+    "altitude_km": 600,
+    "inclination_deg": 97.6,
+    "period_min": 96.5,
+    "mass_kg": 1.0,
+    "satellite_class": "1U CubeSat"
+  }
+}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: sads
+description: A Helm chart for Satellite Architecture Design Suite (SADS) Cloud Microservices
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

@@ -1,0 +1,12 @@
+{
+  "satellite_name": "SADS-Demo-1",
+  "components": [
+    {"id": "bus", "name": "Bus Body", "mass_kg": 80.0, "com": [0.0, 0.0, 0.0]},
+    {"id": "solar_panel_left", "name": "Solar Panel Left", "mass_kg": 15.0, "com": [-1.8, 0.0, 0.0]},
+    {"id": "solar_panel_right", "name": "Solar Panel Right", "mass_kg": 15.0, "com": [1.8, 0.0, 0.0]},
+    {"id": "antenna", "name": "High Gain Antenna", "mass_kg": 5.0, "com": [0.0, 0.0, 1.1]},
+    {"id": "thrusters", "name": "Main Nozzle", "mass_kg": 8.0, "com": [0.0, 0.0, -0.78]},
+    {"id": "reaction_wheels", "name": "Reaction Wheels Assembly", "mass_kg": 4.0, "com": [0.0, 0.0, 0.0]},
+    {"id": "star_tracker", "name": "Star Tracker Sensor", "mass_kg": 1.2, "com": [0.0, 0.72, 0.2]}
+  ]
+}

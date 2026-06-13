@@ -1,0 +1,31 @@
+{
+  "power": {
+    "cubesat_3u_500km_sso_2W_load": {
+      "generation_w": 30.6,
+      "battery_capacity_wh": 30,
+      "eclipse_energy_wh": 1.17,
+      "battery_margin": 6.69,
+      "status": "OK"
+    }
+  },
+  "thermal": {
+    "bus_equilibrium_20W_rad_05m2": {
+      "T_k": 301.5,
+      "T_c": 28.4
+    }
+  },
+  "propulsion": {
+    "leo_geo_hohmann": {
+      "dv1_m_s": 2424.0,
+      "dv2_m_s": 1477.0,
+      "total_dv_m_s": 3901.0,
+      "transfer_time_s": 18965.0
+    }
+  },
+  "orbit": {
+    "iss_500km_51.6deg": {
+      "period_min": 92.68,
+      "eclipse_min": 35.6
+    }
+  }
+}

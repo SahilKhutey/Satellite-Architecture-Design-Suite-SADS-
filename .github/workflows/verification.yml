@@ -1,0 +1,22 @@
+name: Verification Gate
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Run Syntax Compilation Check
+      run: |
+        python -m py_compile mbse/*.py ai/*.py digital_twin/*.py simulation/*.py engines/**/*.py

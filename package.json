@@ -1,0 +1,16 @@
+{
+  "name": "sads-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Satellite Architecture Design Suite (SADS) Production Monorepo",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "^1.10.0"
+  },
+  "packageManager": "pnpm@8.0.0"
+}

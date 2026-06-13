@@ -1,0 +1,112 @@
+version: "3.8"
+
+services:
+  database:
+    image: timescale/timescaledb:latest-pg15
+    container_name: sads-database
+    environment:
+      POSTGRES_USER: sads_admin
+      POSTGRES_PASSWORD: sads_secure_pass_2026
+      POSTGRES_DB: sads_engineering
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sads_admin -d sads_engineering"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cache:
+    image: redis:7-alpine
+    container_name: sads-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway-service/Dockerfile
+    container_name: sads-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://sads_admin:sads_secure_pass_2026@database:5432/sads_engineering
+      - REDIS_URL=redis://cache:6379/0
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - SIMULATION_SERVICE_URL=http://simulation-service:8002
+      - DIGITAL_TWIN_SERVICE_URL=http://digital-twin-service:8005
+      - AI_COPILOT_SERVICE_URL=http://ai-copilot-service:8006
+    depends_on:
+      database:
+
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/authentication-service/Dockerfile
+    container_name: sads-auth-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://sads_admin:sads_secure_pass_2026@database:5432/sads_engineering
+      - JWT_SECRET=sads_super_secret_jwt_key_2026
+    depends_on:
+      database:
+        condition: service_healthy
+
+  simulation-service:
+    build:
+      context: .
+      dockerfile: services/simulation-service/Dockerfile
+    container_name: sads-simulation-service
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://sads_admin:sads_secure_pass_2026@database:5432/sads_engineering
+    depends_on:
+      database:
+        condition: service_healthy
+
+  digital-twin-service:
+
+    build:
+      context: .
+      dockerfile: services/digital-twin-service/Dockerfile
+    container_name: sads-digital-twin-service
+    ports:
+      - "8005:8005"
+    environment:
+      - DATABASE_URL=postgresql://sads_admin:sads_secure_pass_2026@database:5432/sads_engineering
+    depends_on:
+      database:
+        condition: service_healthy
+
+  ai-copilot-service:
+    build:
+      context: .
+      dockerfile: services/ai-copilot-service/Dockerfile
+    container_name: sads-ai-copilot-service
+    ports:
+      - "8006:8006"
+    environment:
+      - DATABASE_URL=postgresql://sads_admin:sads_secure_pass_2026@database:5432/sads_engineering
+    depends_on:
+      database:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+

@@ -1,0 +1,12 @@
+{
+  "name": "sads-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SADS Web Frontend Application",
+  "scripts": {
+    "dev": "echo 'Frontend served via FastAPI main.py' && exit 0",
+    "build": "echo 'Static web assets ready' && exit 0"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

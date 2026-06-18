@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const canvas = new CanvasEngine('canvasContainer', 'canvasSvg', 'canvasDomLayer');
   const viewer3D = new Viewer3D('threeDViewerContainer');
   const orbitViewer = new OrbitViewer('orbitViewerContainer');
+  let customManeuvers = [];
   
   
   // API URL Config
@@ -107,6 +108,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const orbDrift = document.getElementById('orbDrift');
     if (orbDrift) orbDrift.textContent = `0.06°/day`;
 
+    // Sync 3D orbit viewer
+    if (orbitViewer) {
+      if (orbit) {
+        orbitViewer.updatePositionFromLatLon(orbit.latitude_deg, orbit.longitude_deg, orbit.altitude_km);
+      }
+      orbitViewer.updateLaser();
+      
+      const badge = document.getElementById('telemetryContactStatus');
+      if (badge) {
+        if (orbitViewer.laserLine && orbitViewer.laserLine.visible) {
+          badge.textContent = 'CONNECTED';
+          badge.className = 'badge bg-green';
+        } else {
+          badge.textContent = 'NO CONTACT';
+          badge.className = 'badge bg-red';
+        }
+      }
+    }
 
     // Sync 3D viewer elements
     if (viewer3D && viewer3D.satelliteGroup) {
@@ -203,6 +222,66 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnAutoLayout').addEventListener('click', () => {
     canvas.zoomToFit();
   });
+
+  const btnRunTradeStudy = document.getElementById('btnRunTradeStudy');
+  if (btnRunTradeStudy) {
+    btnRunTradeStudy.addEventListener('click', () => {
+      btnRunTradeStudy.disabled = true;
+      btnRunTradeStudy.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Optimizing Architecture...';
+      
+      const design = compileArchitecture();
+      
+      fetch(`${API_BASE}/optimization/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(design)
+      })
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to run optimization trade study');
+        return res.json();
+      })
+      .then(data => {
+        btnRunTradeStudy.disabled = false;
+        btnRunTradeStudy.innerHTML = '<i class="fa-solid fa-rotate"></i> Run Trade-Study Optimization';
+        
+        if (data.status === 'success' && dashboardRouter.charts && dashboardRouter.charts['opt']) {
+          const optChart = dashboardRouter.charts['opt'];
+          optChart.data.datasets[0].data = data.variants;
+          optChart.data.datasets[1].data = data.pareto_front;
+          optChart.update();
+          
+          const copilotLog = document.getElementById('copilotLog');
+          if (copilotLog) {
+            const opt = data.optimum;
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-bubble assistant';
+            bubble.innerHTML = `
+              <div class="header" style="font-weight: 700; display: flex; align-items: center; gap: 6px; color: var(--accent-cyan);">
+                <i class="fa-solid fa-robot"></i> SADS Optimization Agent
+              </div>
+              <div class="message" style="margin-top: 6px; font-size: 11px; line-height: 1.4;">
+                <strong>Architecture trade study completed!</strong><br>
+                Evaluated 40 design variants. Located global optimum using Nelder-Mead Simplex solver:<br>
+                <ul style="margin-top: 4px; padding-left: 16px;">
+                  <li>Optimal Solar Panel Area: <strong>${opt.area_m2.toFixed(2)} m²</strong></li>
+                  <li>Optimal Battery Capacity: <strong>${opt.capacity_wh.toFixed(1)} Wh</strong></li>
+                  <li>Resulting Total Mass: <strong>${opt.mass_kg.toFixed(1)} kg</strong></li>
+                  <li>Resulting Power Margin: <strong>${opt.power_margin_w.toFixed(1)} W</strong></li>
+                </ul>
+              </div>
+            `;
+            copilotLog.appendChild(bubble);
+            copilotLog.scrollTop = copilotLog.scrollHeight;
+          }
+        }
+      })
+      .catch(err => {
+        btnRunTradeStudy.disabled = false;
+        btnRunTradeStudy.innerHTML = '<i class="fa-solid fa-rotate"></i> Run Trade-Study Optimization';
+        alert(err.message);
+      });
+    });
+  }
 
   // Delete key binds to delete selected node
   window.addEventListener('keydown', (e) => {
@@ -380,7 +459,17 @@ document.addEventListener('DOMContentLoaded', () => {
       ],
       power: { arrays: [], batteries: [], loads: [], eclipse_duration_min: 35.0, orbit_period_min: 95.0 },
       thermal: { nodes: [] },
-      propulsion: { thrusters: [], tanks: [], dry_mass_kg: 50.0, maneuvers: [{ name: 'Deorbit', delta_v_m_s: 150 }] },
+      propulsion: {
+        thrusters: [],
+        tanks: [],
+        dry_mass_kg: 50.0,
+        maneuvers: [
+          { name: 'Orbit Raising (50km)', delta_v_m_s: 25.8 },
+          { name: 'Station Keeping (5 yrs)', delta_v_m_s: 45.0 },
+          { name: 'Deorbit Maneuver', delta_v_m_s: 85.0 },
+          ...customManeuvers
+        ]
+      },
       orbit: { altitude_km: 400.0, inclination_deg: 51.6 }
     };
 
@@ -434,9 +523,10 @@ document.addEventListener('DOMContentLoaded', () => {
           name: node.name,
           isp_s: p.isp_s,
           thrust_n: p.thrust_n,
-          mass_kg: p.mass_kg
+          mass_kg: p.mass_kg,
+          power_w: p.nominal_power_w || 0.0
         });
-        totalNominalLoad += 5.0; // average thruster firing load
+        totalNominalLoad += p.nominal_power_w || 0.0;
       } else if (node.type === 'tank') {
         payload.propulsion.tanks.push({
           name: node.name,
@@ -570,7 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // 5. Propulsion Analysis
-      let propResult = { fuel_margin: 1.0, total_delta_v_m_s: 0.0 };
+      let propResult = { fuel_margin: 1.0, total_delta_v_m_s: 0.0, required_propellant_kg: 0.0 };
       if (payload.propulsion.thrusters.length > 0 && payload.propulsion.tanks.length > 0) {
         const prRes = await fetch(`${API_BASE}/propulsion/analyze`, {
           method: 'POST',
@@ -578,6 +668,82 @@ document.addEventListener('DOMContentLoaded', () => {
           body: JSON.stringify(payload.propulsion)
         });
         if (prRes.ok) propResult = await prRes.json();
+      }
+      
+      // Update Propulsion Subsystem Dashboard UI
+      const propActiveThruster = document.getElementById('propActiveThruster');
+      if (propActiveThruster) {
+        if (payload.propulsion.thrusters.length > 0) {
+          const t = payload.propulsion.thrusters[0];
+          propActiveThruster.textContent = t.name;
+          document.getElementById('propThrustLevel').textContent = `${t.thrust_n.toFixed(2)} N`;
+          document.getElementById('propIsp').textContent = `${t.isp_s.toFixed(1)} seconds`;
+        } else {
+          propActiveThruster.textContent = 'None configured';
+          document.getElementById('propThrustLevel').textContent = '0.0 N';
+          document.getElementById('propIsp').textContent = '0 seconds';
+        }
+        
+        if (payload.propulsion.tanks.length > 0) {
+          const totalPropellant = payload.propulsion.tanks.reduce((sum, tk) => sum + tk.mass_kg, 0);
+          const requiredPropellant = propResult.required_propellant_kg || 0.0;
+          const propPercentage = totalPropellant > 0 ? Math.max(0.0, ((totalPropellant - requiredPropellant) / totalPropellant) * 100.0) : 0.0;
+          
+          const tankName = payload.propulsion.tanks[0].name || '';
+          const propellantName = tankName.toLowerCase().includes('xenon') ? 'Xenon' : 'Hydrazine';
+          
+          document.getElementById('propTankLevel').textContent = `${propPercentage.toFixed(1)}% (${propellantName})`;
+          const reserveLabel = document.getElementById('propFuelReserveLabel');
+          if (reserveLabel) reserveLabel.textContent = `${propellantName} Fuel Reserve`;
+          
+          const fillWidth = `${propPercentage.toFixed(1)}%`;
+          document.getElementById('propFuelFill').style.width = fillWidth;
+          document.getElementById('propFuelLabel').textContent = `${Math.max(0, totalPropellant - requiredPropellant).toFixed(2)} kg remaining (${propPercentage.toFixed(1)}%)`;
+          
+          const lifetimeYrs = requiredPropellant > 0 ? (5.0 * (totalPropellant / requiredPropellant)) : 0.0;
+          document.getElementById('propLifetimeText').textContent = `Expected station keeping lifetime: ${lifetimeYrs.toFixed(1)} years with existing fuel margins.`;
+          
+          // Populate dynamic maneuvers table with custom sequence
+          let currentMass = totalDryMass + totalPropellant;
+          let avgIsp = propResult.average_isp_s || 220;
+          const g0 = 9.80665;
+          let tableHtml = '';
+          
+          payload.propulsion.maneuvers.forEach(m => {
+            const mFuel = currentMass * (1 - Math.exp(-m.delta_v_m_s / (avgIsp * g0)));
+            currentMass -= mFuel;
+            tableHtml += `<tr>
+              <td>${m.name}</td>
+              <td>${m.delta_v_m_s.toFixed(1)} m/s</td>
+              <td>${mFuel.toFixed(2)} kg</td>
+            </tr>`;
+          });
+          document.getElementById('propManeuverTableBody').innerHTML = tableHtml;
+        } else {
+          document.getElementById('propTankLevel').textContent = '0.0%';
+          document.getElementById('propFuelFill').style.width = '0%';
+          document.getElementById('propFuelLabel').textContent = '0.00 kg remaining (0.0%)';
+          document.getElementById('propLifetimeText').textContent = 'Expected station keeping lifetime: 0.0 years with existing fuel margins.';
+          document.getElementById('propManeuverTableBody').innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">Add thruster and tank elements to active design to compute budget.</td></tr>`;
+        }
+        
+        // Update vital badge
+        const vitalProp = document.getElementById('vitalProp');
+        if (vitalProp) {
+          if (payload.propulsion.thrusters.length === 0 || payload.propulsion.tanks.length === 0) {
+            vitalProp.textContent = 'NO PROP';
+            vitalProp.className = 'val text-red';
+          } else if (propResult.propellant_match_ok === false) {
+            vitalProp.textContent = 'MISMATCH';
+            vitalProp.className = 'val text-red';
+          } else if (propResult.fuel_margin < 0.0) {
+            vitalProp.textContent = 'LOW MARGIN';
+            vitalProp.className = 'val text-red';
+          } else {
+            vitalProp.textContent = 'OK';
+            vitalProp.className = 'val text-green';
+          }
+        }
       }
       
 
@@ -869,8 +1035,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (batteries.length === 0) {
       report += `⚠️ Critical: No Battery packs found. Satellite will experience instant thermal/power shutoff during LEO eclipse.\n`;
     }
-    if (thrusters.length > 0 && Object.values(canvas.nodes).filter(n => n.type === 'tank').length === 0) {
-      report += `⚠️ Warning: Thrusters added but no Propellant Tank detected. propulsion is non-functional.\n`;
+    if (thrusters.length > 0) {
+      const tanks = Object.values(canvas.nodes).filter(n => n.type === 'tank');
+      if (tanks.length === 0) {
+        report += `⚠️ Warning: Thrusters added but no Propellant Tank detected. propulsion is non-functional.\n`;
+      } else {
+        const thrName = thrusters[0].name.toLowerCase();
+        const tnkName = tanks[0].name.toLowerCase();
+        const isElectricThr = thrName.includes('ion') || thrName.includes('hall') || thrName.includes('bolt');
+        const isXenonTnk = tnkName.includes('xenon') || tnkName.includes('gas');
+        if (isElectricThr && !isXenonTnk) {
+          report += `⚠️ Warning: Electric Ion Engine is coupled with a Chemical tank. Xenon gas propellant is required.\n`;
+        } else if (!isElectricThr && isXenonTnk) {
+          report += `⚠️ Warning: Chemical Thruster is coupled with a Xenon tank. Hydrazine propellant is required.\n`;
+        }
+      }
     }
     if (antennas.length === 0) {
       report += `⚠️ Warning: Missing high-gain transmitter antenna. Comm payload cannot close link budget for Earth ground station.\n`;
@@ -1144,6 +1323,9 @@ document.addEventListener('DOMContentLoaded', () => {
         customGroup.appendChild(item);
       }
 
+      bindDragEvents();
+      syncCustomComponentToBackend(name, type, mass, power, { val1, val2 });
+
       // Reset input name
       document.getElementById('customCompName').value = '';
     });
@@ -1169,7 +1351,12 @@ document.addEventListener('DOMContentLoaded', () => {
       'dash-home': { title: 'Platform > Home', showRightSidebar: false },
       'dash-missions': { title: 'Platform > Mission Control', showRightSidebar: false, onOpen: () => dashboardRouter.initMissionMap() },
       'dash-satellites': { title: 'Platform > Spacecraft Vitals', showRightSidebar: true, onOpen: () => dashboardRouter.mountSatelliteViewer('dash-satellites') },
-      'dash-architecture': { title: 'Platform > Architecture Designer', showRightSidebar: true, onOpen: () => dashboardRouter.mountCanvas() },
+      'dash-architecture': { title: 'Platform > Architecture Designer', showRightSidebar: true, onOpen: () => {
+        dashboardRouter.mountCanvas();
+        setTimeout(() => {
+          canvas.zoomToFit();
+        }, 100);
+      }},
       'dash-power': { title: 'Platform > EPS (Power)', showRightSidebar: false, onOpen: () => dashboardRouter.initPowerChart() },
       'dash-thermal': { title: 'Platform > TCS (Thermal)', showRightSidebar: false, onOpen: () => dashboardRouter.initThermalChart() },
       'dash-communications': { title: 'Platform > TT&C (Comms)', showRightSidebar: false, onOpen: () => dashboardRouter.initCommChart() },
@@ -1428,6 +1615,54 @@ document.addEventListener('DOMContentLoaded', () => {
           scales: {
             x: { ticks: { color: '#94a3b8', font: { size: 8 } }, grid: { display: false } },
             y: { ticks: { color: '#94a3b8', font: { size: 8 } }, grid: { color: 'rgba(255,255,255,0.03)' } }
+          }
+        }
+      });
+    },
+
+    initThermalTransientChart() {
+      if (this.charts['thermalTransient']) return;
+      const canvasEl = document.getElementById('chartThermalTransient');
+      if (!canvasEl) return;
+      const ctx = canvasEl.getContext('2d');
+      this.charts['thermalTransient'] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: []
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { size: 9 } } } },
+          scales: {
+            x: { title: { display: true, text: 'Distance along rod (m)', color: '#94a3b8', font: { size: 9 } }, ticks: { color: '#94a3b8', font: { size: 8 } }, grid: { display: false } },
+            y: { title: { display: true, text: 'Temperature (K)', color: '#94a3b8', font: { size: 9 } }, ticks: { color: '#94a3b8', font: { size: 8 } }, grid: { color: 'rgba(255,255,255,0.03)' } }
+          }
+        }
+      });
+    },
+
+    initOrbitDecayChart() {
+      if (this.charts['orbitDecay']) return;
+      const canvasEl = document.getElementById('chartOrbitDecay');
+      if (!canvasEl) return;
+      const ctx = canvasEl.getContext('2d');
+      this.charts['orbitDecay'] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            { label: 'Altitude (km)', data: [], borderColor: '#10b981', borderWidth: 2, fill: false, pointRadius: 0, tension: 0.1 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { title: { display: true, text: 'Propagation Time (min)', color: '#94a3b8', font: { size: 9 } }, ticks: { color: '#94a3b8', font: { size: 8 } }, grid: { display: false } },
+            y: { title: { display: true, text: 'Altitude (km)', color: '#94a3b8', font: { size: 9 } }, ticks: { color: '#94a3b8', font: { size: 8 } }, grid: { color: 'rgba(255,255,255,0.03)' } }
           }
         }
       });
@@ -1720,7 +1955,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const activeView = document.getElementById(targetSubpage);
             if (activeView) {
-              activeView.style.display = 'block';
+              activeView.style.display = 'flex';
               activeView.classList.add('active');
             }
           }
@@ -1738,6 +1973,10 @@ document.addEventListener('DOMContentLoaded', () => {
             dashboardRouter.initMassSubpageChart();
           } else if (targetSubpage === 'power-battery') {
             dashboardRouter.initBatterySoCChart();
+          } else if (targetSubpage === 'thermal-transient') {
+            dashboardRouter.initThermalTransientChart();
+          } else if (targetSubpage === 'orbit-prop') {
+            dashboardRouter.initOrbitDecayChart();
           } else if (targetSubpage === 'twin-status') {
             const mount = document.querySelector('.twin-satellite-mount');
             const container = document.getElementById('threeDViewerContainer');
@@ -1886,23 +2125,41 @@ document.addEventListener('DOMContentLoaded', () => {
       
       const btnProp = document.getElementById('btnPropSim');
       if (btnProp) {
-        btnProp.onclick = () => {
+        btnProp.onclick = async () => {
           const alt1 = parseFloat(document.getElementById('propAlt1').value) || 400;
           const alt2 = parseFloat(document.getElementById('propAlt2').value) || 800;
           
-          const mu = 3.986004418e5;
-          const r1 = 6378.1 + alt1;
-          const r2 = 6378.1 + alt2;
+          const r1 = 6378.137 + alt1;
+          const r2 = 6378.137 + alt2;
           
-          const v1 = Math.sqrt(mu / r1);
-          const dv1 = Math.sqrt(mu / r1) * (Math.sqrt((2 * r2) / (r1 + r2)) - 1);
-          const dv2 = Math.sqrt(mu / r2) * (1 - Math.sqrt((2 * r1) / (r1 + r2)));
-          const totalDv = dv1 + dv2;
-          
-          const dryMass = 125.0;
-          const fuel = dryMass * (Math.exp((totalDv * 1000) / (9.81 * 220)) - 1);
-          
-          document.getElementById('propResult').textContent = `Total ΔV Required: ${(totalDv * 1000).toFixed(1)} m/s (Hydrazine fuel: ${fuel.toFixed(2)} kg)`;
+          try {
+            const response = await fetch(`${API_BASE}/orbit/hohmann?r1_km=${r1}&r2_km=${r2}`, {
+              method: 'POST'
+            });
+            if (response.ok) {
+              const res = await response.json();
+              const totalDv = res.total_dv_m_s;
+              const { totalDryMass } = compileArchitecture();
+              const fuel = totalDryMass * (Math.exp(totalDv / (9.80665 * 220)) - 1);
+              
+              document.getElementById('propResult').textContent = `Total ΔV Required: ${totalDv.toFixed(1)} m/s (Hydrazine fuel: ${fuel.toFixed(2)} kg)`;
+              
+              // Update custom maneuvers array
+              customManeuvers = customManeuvers.filter(m => m.name !== 'Hohmann Transfer');
+              customManeuvers.push({
+                name: 'Hohmann Transfer',
+                delta_v_m_s: totalDv
+              });
+              
+              // Refresh dynamic subsystem allocations
+              runLiveAnalysis();
+            } else {
+              const err = await response.text();
+              document.getElementById('propResult').textContent = `Error: ${err}`;
+            }
+          } catch (e) {
+            document.getElementById('propResult').textContent = `Connection failed: ${e.message}`;
+          }
         };
       }
 
@@ -1930,11 +2187,174 @@ document.addEventListener('DOMContentLoaded', () => {
         };
       }
 
+      const btnRunOrbitProp = document.getElementById('btnRunOrbitPropagation');
+      if (btnRunOrbitProp) {
+        btnRunOrbitProp.onclick = async () => {
+          const mass = parseFloat(document.getElementById('orbitPropMass').value) || 150.0;
+          const area = parseFloat(document.getElementById('orbitPropArea').value) || 2.0;
+          const cd = parseFloat(document.getElementById('orbitPropCd').value) || 2.2;
+          const orbits = parseFloat(document.getElementById('orbitPropOrbits').value) || 2.0;
+          const usePerturbations = document.getElementById('orbitPropPerturb').checked;
+          const alt = parseFloat(document.getElementById('orbitAltitudeInput').value) || 400.0;
+          const inc = parseFloat(document.getElementById('orbitIncInput').value) || 51.6;
+          const ecc = 0.0; // Circular orbit base
+          
+          const statusMsg = document.getElementById('orbitPropStatusMsg');
+          statusMsg.textContent = 'Propagating trajectory...';
+          statusMsg.style.color = 'var(--accent-cyan)';
+          
+          try {
+            const response = await fetch(`${API_BASE}/orbit/propagate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                altitude_km: alt,
+                inclination_deg: inc,
+                eccentricity: ecc,
+                mass_kg: mass,
+                drag_area_m2: area,
+                drag_coefficient_cd: cd,
+                num_orbits: orbits,
+                use_perturbations: usePerturbations
+              })
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              statusMsg.textContent = `Completed propagation. Final Altitude: ${result.report.final_altitude_km.toFixed(2)} km`;
+              statusMsg.style.color = '#10b981';
+              
+              if (orbitViewer) {
+                orbitViewer.drawPropagatedPath(result.history);
+              }
+              
+              document.getElementById('orbitPropReportPanel').style.display = 'block';
+              document.getElementById('orbitPropReportDecay').textContent = `Decay Rate: ${result.report.decay_rate_m_day.toFixed(4)} m/day`;
+              document.getElementById('orbitPropReportDrift').textContent = `J2 Nodal Precession: ${result.report.j2_nodal_drift_deg_day.toFixed(4)}°/day`;
+              
+              const labels = result.history.map(pt => (pt.time_s / 60).toFixed(1));
+              const alts = result.history.map(pt => pt.altitude_km);
+              
+              if (dashboardRouter.charts['orbitDecay']) {
+                dashboardRouter.charts['orbitDecay'].data.labels = labels;
+                dashboardRouter.charts['orbitDecay'].data.datasets[0].data = alts;
+                dashboardRouter.charts['orbitDecay'].update();
+              }
+            } else {
+              const err = await response.text();
+              statusMsg.textContent = `Error: ${err}`;
+              statusMsg.style.color = 'var(--accent-red)';
+            }
+          } catch (e) {
+            statusMsg.textContent = `Failed to connect: ${e.message}`;
+            statusMsg.style.color = 'var(--accent-red)';
+          }
+        };
+      }
+
+      const btnRunTransientThermal = document.getElementById('btnRunTransientThermal');
+      if (btnRunTransientThermal) {
+        btnRunTransientThermal.onclick = async () => {
+          const length = parseFloat(document.getElementById('transientLength').value) || 2.0;
+          const diffusivity = parseFloat(document.getElementById('transientDiffusivity').value) || 6.87e-5;
+          const initTemp = parseFloat(document.getElementById('transientInitTemp').value) || 293.0;
+          const leftTemp = parseFloat(document.getElementById('transientBoundLeft').value) || 300.0;
+          const rightTemp = parseFloat(document.getElementById('transientBoundRight').value) || 250.0;
+          
+          const statusMsg = document.getElementById('transientStatusMsg');
+          statusMsg.textContent = 'Solving transient heat equation...';
+          statusMsg.style.color = 'var(--accent-cyan)';
+          
+          try {
+            const response = await fetch(`${API_BASE}/thermal/transient`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                length_m: length,
+                thermal_diffusivity: diffusivity,
+                init_temp_k: initTemp,
+                boundary_left_k: leftTemp,
+                boundary_right_k: rightTemp,
+                nodes: 10,
+                time_steps: 50,
+                dt: 10.0
+              })
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              statusMsg.textContent = 'Simulation completed successfully.';
+              statusMsg.style.color = '#10b981';
+              
+              const xCoords = result.x_coords.map(x => x.toFixed(2) + 'm');
+              const temps = result.temperatures;
+              const datasets = [
+                { label: 'Initial (t=0s)', data: temps[0], borderColor: '#a78bfa', borderWidth: 2, fill: false, pointRadius: 2, tension: 0.1 },
+                { label: 'Mid-Point (t=' + (Math.floor(temps.length / 2) * 10) + 's)', data: temps[Math.floor(temps.length / 2)], borderColor: '#06b6d4', borderWidth: 2, fill: false, pointRadius: 2, tension: 0.1 },
+                { label: 'Final (t=' + ((temps.length - 1) * 10) + 's)', data: temps[temps.length - 1], borderColor: '#10b981', borderWidth: 2, fill: false, pointRadius: 2, tension: 0.1 }
+              ];
+              
+              if (dashboardRouter.charts['thermalTransient']) {
+                dashboardRouter.charts['thermalTransient'].data.labels = xCoords;
+                dashboardRouter.charts['thermalTransient'].data.datasets = datasets;
+                dashboardRouter.charts['thermalTransient'].update();
+              }
+            } else {
+              const err = await response.text();
+              statusMsg.textContent = `Error: ${err}`;
+              statusMsg.style.color = 'var(--accent-red)';
+            }
+          } catch (e) {
+            statusMsg.textContent = `Failed to connect: ${e.message}`;
+            statusMsg.style.color = 'var(--accent-red)';
+          }
+        };
+      }
+
       const btnMonte = document.getElementById('btnLaunchMonte');
       if (btnMonte) {
-        btnMonte.onclick = () => {
+        btnMonte.onclick = async () => {
           const runs = parseInt(document.getElementById('monteRuns').value) || 100;
-          document.getElementById('monteResultLog').textContent = `Successfully completed ${runs} runs. Mean DoD: 22.4% (Standard Deviation: 0.82%). 100% converged.`;
+          const effVar = parseFloat(document.getElementById('monteEffVar').value) || 5.0;
+          const logEl = document.getElementById('monteResultLog');
+          logEl.textContent = 'Running Monte Carlo ensemble sweeps...';
+          logEl.style.color = 'var(--accent-cyan)';
+          
+          const { payload } = compileArchitecture();
+          
+          try {
+            const response = await fetch(`${API_BASE}/reliability/monte-carlo`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                runs: runs,
+                solar_array_eff_var: effVar,
+                req: payload
+              })
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              const stats = result.statistics;
+              logEl.style.color = '#10b981';
+              logEl.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 5px;">Ensemble Results (${result.samples_count} runs):</div>
+                <div>Mission Success Probability: <span style="font-size: 14px; color: #10b981; font-weight: bold;">${result.reliability_percent.toFixed(1)}%</span></div>
+                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">
+                  Mean Usable SoC Margin: ${(stats.mean * 100).toFixed(2)}%<br>
+                  Std Deviation: ${(stats.std * 100).toFixed(2)}%<br>
+                  Worst Case Margin: ${(stats.min * 100).toFixed(2)}% | Best Case: ${(stats.max * 100).toFixed(2)}%
+                </div>
+              `;
+            } else {
+              const err = await response.text();
+              logEl.textContent = `Error: ${err}`;
+              logEl.style.color = 'var(--accent-red)';
+            }
+          } catch (e) {
+            logEl.textContent = `Failed to connect: ${e.message}`;
+            logEl.style.color = 'var(--accent-red)';
+          }
         };
       }
 
@@ -1949,6 +2369,439 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   };
+
+  // ==========================================================================
+  // Schematic Designer Datasets Integration
+  // ==========================================================================
+  
+  function findCompGroup(headerText) {
+    const groups = document.querySelectorAll('.comp-group');
+    for (let group of groups) {
+      const header = group.querySelector('.group-header');
+      if (header && header.textContent.trim().toLowerCase().includes(headerText.toLowerCase())) {
+        return group;
+      }
+    }
+    return null;
+  }
+
+  function createLibraryDragItem(parentEl, type, itemData) {
+    const item = document.createElement('div');
+    item.className = 'drag-item';
+    item.setAttribute('draggable', 'true');
+    item.setAttribute('data-type', type);
+    
+    let iconClass = 'fa-microchip';
+    if (type === 'solar_panel') {
+      iconClass = 'fa-solar-panel text-cyan';
+      item.setAttribute('data-efficiency', itemData.efficiency || 0.30);
+      const mass_per_m2 = itemData.mass_kg_m2 || 0.85;
+      item.setAttribute('data-area', 1.5);
+      item.setAttribute('data-mass', (1.5 * mass_per_m2).toFixed(2));
+    } else if (type === 'battery') {
+      iconClass = 'fa-battery-three-quarters text-green';
+      const dod = itemData.dod || 0.30;
+      const capacity = 120.0;
+      const mass = itemData.capacity_wh_kg ? (capacity / itemData.capacity_wh_kg).toFixed(2) : 2.0;
+      item.setAttribute('data-capacity', capacity);
+      item.setAttribute('data-dod', dod);
+      item.setAttribute('data-mass', mass);
+    } else if (type === 'thruster') {
+      iconClass = 'fa-fire text-red';
+      item.setAttribute('data-thrust', itemData.thrust_n || 0.5);
+      item.setAttribute('data-isp', itemData.isp_s || 220);
+      item.setAttribute('data-mass', itemData.mass_kg || 1.0);
+      const power = itemData.power_w || (itemData.prop_type === 'hall_thruster' ? 150 : 5);
+      item.setAttribute('data-power', power);
+    } else if (type === 'antenna') {
+      iconClass = 'fa-satellite text-cyan';
+      item.setAttribute('data-gain', itemData.gain_dbi || 12.0);
+      item.setAttribute('data-freq', itemData.freq_ghz || 2.2);
+      item.setAttribute('data-mass', itemData.mass_kg || 0.5);
+    } else if (type === 'reaction_wheel') {
+      iconClass = 'fa-circle-notch text-blue';
+      item.setAttribute('data-mass', itemData.mass_kg || 1.2);
+    } else if (type === 'sensor') {
+      iconClass = 'fa-star text-yellow';
+      item.setAttribute('data-stype', 'star_tracker');
+      const accuracy_deg = itemData.accuracy_arcsec ? (itemData.accuracy_arcsec / 3600.0).toFixed(4) : 0.005;
+      item.setAttribute('data-accuracy', accuracy_deg);
+      item.setAttribute('data-mass', itemData.mass_kg || 0.8);
+    }
+
+    item.innerHTML = `<i class="fa-solid ${iconClass}"></i> ${itemData.name}`;
+    parentEl.appendChild(item);
+  }
+
+  function renderComponentLibrary(components) {
+    if (!components) return;
+
+    const groupsToClear = [
+      { text: 'Solar Arrays', key: 'solar_panels', type: 'solar_panel' },
+      { text: 'Energy Storage', key: 'batteries', type: 'battery' },
+      { text: 'Propulsion', key: 'thrusters', type: 'thruster' },
+      { text: 'ADCS', key: 'reaction_wheels', type: 'reaction_wheel' },
+      { text: 'Communications', key: 'antennas', type: 'antenna' }
+    ];
+
+    groupsToClear.forEach(g => {
+      const groupEl = findCompGroup(g.text);
+      if (!groupEl) return;
+      
+      const header = groupEl.querySelector('.group-header');
+      groupEl.innerHTML = '';
+      if (header) groupEl.appendChild(header);
+
+      const list = components[g.key] || [];
+      list.forEach(itemData => {
+        createLibraryDragItem(groupEl, g.type, itemData);
+      });
+
+      if (g.text === 'ADCS' && components['star_trackers']) {
+        components['star_trackers'].forEach(itemData => {
+          createLibraryDragItem(groupEl, 'sensor', itemData);
+        });
+      }
+    });
+
+    bindDragEvents();
+  }
+
+  function bindDragEvents() {
+    const dragItems = document.querySelectorAll('.drag-item');
+    dragItems.forEach(item => {
+      item.ondragstart = (e) => {
+        e.dataTransfer.setData('comp-type', item.getAttribute('data-type'));
+        const properties = {
+          name: item.textContent.trim(),
+          efficiency: item.getAttribute('data-efficiency'),
+          mass: item.getAttribute('data-mass'),
+          capacity: item.getAttribute('data-capacity'),
+          thrust: item.getAttribute('data-thrust'),
+          isp: item.getAttribute('data-isp'),
+          gain: item.getAttribute('data-gain'),
+          freq: item.getAttribute('data-freq'),
+          accuracy: item.getAttribute('data-accuracy'),
+          stype: item.getAttribute('data-stype'),
+          area: item.getAttribute('data-area'),
+          power: item.getAttribute('data-power')
+        };
+        e.dataTransfer.setData('comp-meta', JSON.stringify(properties));
+      };
+    });
+  }
+
+  function initComponentLibrary() {
+    fetch(`${API_BASE}/components/library`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load library');
+        return res.json();
+      })
+      .then(data => {
+        renderComponentLibrary(data.components);
+      })
+      .catch(err => {
+        console.error(err);
+        bindDragEvents();
+      });
+  }
+
+  function syncCustomComponentToBackend(name, type, mass, power, vals) {
+    fetch(`${API_BASE}/components/library`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load library for sync');
+        return res.json();
+      })
+      .then(data => {
+        if (!data.components) data.components = {};
+        
+        let category = 'custom_subsystems';
+        let backendItem = { name, mass_kg: mass, power_w: power };
+
+        if (type === 'solar_panel') {
+          category = 'solar_panels';
+          backendItem.efficiency = vals.val2;
+          backendItem.mass_kg_m2 = vals.val1 > 0 ? (mass / vals.val1) : 0.85;
+        } else if (type === 'battery') {
+          category = 'batteries';
+          backendItem.capacity_wh_kg = vals.val1 > 0 ? (vals.val1 / mass) : 165;
+          backendItem.dod = vals.val2;
+        } else if (type === 'thruster') {
+          category = 'thrusters';
+          backendItem.thrust_n = vals.val1;
+          backendItem.isp_s = vals.val2;
+          backendItem.mass_kg = mass;
+        } else if (type === 'antenna') {
+          category = 'antennas';
+          backendItem.gain_dbi = vals.val1;
+          backendItem.freq_ghz = vals.val2;
+          backendItem.mass_kg = mass;
+        } else if (type === 'reaction_wheel') {
+          category = 'reaction_wheels';
+          backendItem.mass_kg = mass;
+        } else if (type === 'sensor') {
+          category = 'star_trackers';
+          backendItem.accuracy_arcsec = vals.val1 * 3600.0;
+          backendItem.mass_kg = mass;
+        }
+
+        if (!data.components[category]) {
+          data.components[category] = [];
+        }
+        
+        const idx = data.components[category].findIndex(c => c.name === name);
+        if (idx !== -1) {
+          data.components[category][idx] = backendItem;
+        } else {
+          data.components[category].push(backendItem);
+        }
+
+        return fetch(`${API_BASE}/components/library`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+      })
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to save library');
+        console.log('Custom component synced to backend successfully');
+      })
+      .catch(err => console.error('Library sync error:', err));
+  }
+
+  function updateSchematicsDropdown() {
+    fetch(`${API_BASE}/design/list`)
+      .then(res => res.json())
+      .then(data => {
+        const select = document.getElementById('selectSchematicPreset');
+        if (!select) return;
+        
+        const firstOption = select.options[0];
+        select.innerHTML = '';
+        select.appendChild(firstOption);
+        
+        if (data.designs) {
+          data.designs.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+          });
+        }
+      })
+      .catch(err => console.error('Failed to list designs:', err));
+  }
+
+  function saveActiveSchematic() {
+    const satelliteNameInput = document.getElementById('satelliteName');
+    const satelliteName = satelliteNameInput ? satelliteNameInput.value.trim() : '';
+    if (!satelliteName) {
+      alert('Please enter a Satellite Name before saving.');
+      return;
+    }
+
+    const schematicData = {
+      satellite_name: satelliteName,
+      orbit_preset: document.getElementById('orbitPreset').value,
+      canvas_pan_x: canvas.panX,
+      canvas_pan_y: canvas.panY,
+      canvas_zoom: canvas.zoom,
+      nodes: canvas.nodes,
+      links: canvas.links,
+      custom_maneuvers: customManeuvers
+    };
+
+    fetch(`${API_BASE}/design/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(schematicData)
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('Save failed');
+      return res.json();
+    })
+    .then(data => {
+      alert(`Schematic '${satelliteName}' saved successfully to backend!`);
+      updateSchematicsDropdown();
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Failed to save schematic to backend.');
+    });
+  }
+
+  function loadSchematicByName(name) {
+    if (!name) return;
+    fetch(`${API_BASE}/design/load/${name}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Load failed');
+        return res.json();
+      })
+      .then(data => {
+        renderSchematicData(data);
+        alert(`Schematic '${name}' loaded successfully!`);
+      })
+      .catch(err => {
+        console.error(err);
+        alert(`Failed to load schematic '${name}'.`);
+      });
+  }
+
+  function deleteSchematicByName(name) {
+    if (!name) return;
+    if (!confirm(`Are you sure you want to delete schematic '${name}' from backend?`)) return;
+    
+    fetch(`${API_BASE}/design/delete/${name}`, {
+      method: 'DELETE'
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('Delete failed');
+      return res.json();
+    })
+    .then(data => {
+      alert(`Schematic '${name}' deleted successfully!`);
+      updateSchematicsDropdown();
+      const satelliteNameInput = document.getElementById('satelliteName');
+      if (satelliteNameInput && satelliteNameInput.value === name) {
+        canvas.clear();
+        satelliteNameInput.value = '';
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert(`Failed to delete schematic '${name}'.`);
+    });
+  }
+
+  function exportSchematicToJSON() {
+    const satelliteName = document.getElementById('satelliteName').value.trim() || 'satellite_schematic';
+    const schematicData = {
+      satellite_name: satelliteName,
+      orbit_preset: document.getElementById('orbitPreset').value,
+      canvas_pan_x: canvas.panX,
+      canvas_pan_y: canvas.panY,
+      canvas_zoom: canvas.zoom,
+      nodes: canvas.nodes,
+      links: canvas.links,
+      custom_maneuvers: customManeuvers
+    };
+    
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(schematicData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `${satelliteName}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  }
+
+  function importSchematicFromJSON(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        renderSchematicData(data);
+        alert('Schematic imported successfully!');
+      } catch (err) {
+        console.error(err);
+        alert('Failed to parse JSON file. Make sure it is a valid SADS schematic.');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  }
+
+  function renderSchematicData(data) {
+    if (!data) return;
+    
+    canvas.clear();
+    
+    if (typeof data.canvas_pan_x === 'number') canvas.panX = data.canvas_pan_x;
+    if (typeof data.canvas_pan_y === 'number') canvas.panY = data.canvas_pan_y;
+    if (typeof data.canvas_zoom === 'number') canvas.zoom = data.canvas_zoom;
+    canvas.updateTransform();
+
+    if (data.satellite_name) {
+      const nameInput = document.getElementById('satelliteName');
+      if (nameInput) {
+        nameInput.value = data.satellite_name;
+        nameInput.dispatchEvent(new Event('input'));
+      }
+    }
+    if (data.orbit_preset) {
+      const presetSelect = document.getElementById('orbitPreset');
+      if (presetSelect) {
+        presetSelect.value = data.orbit_preset;
+        presetSelect.dispatchEvent(new Event('change'));
+      }
+    }
+    if (Array.isArray(data.custom_maneuvers)) {
+      customManeuvers = data.custom_maneuvers;
+    }
+
+    const nodes = data.nodes || {};
+    Object.keys(nodes).forEach(id => {
+      const node = nodes[id];
+      canvas.addNode(node.type, node.name, node.x, node.y, node.properties, node.id);
+    });
+
+    if (Array.isArray(data.links)) {
+      canvas.links = data.links;
+      canvas.drawLinks();
+    }
+
+    canvas.emit('change', { nodes: canvas.nodes, links: canvas.links });
+    runLiveAnalysis();
+  }
+
+  // Setup toolbar schematic event listeners
+  const btnLoad = document.getElementById('btnLoadSchematic');
+  if (btnLoad) {
+    btnLoad.addEventListener('click', () => {
+      const selected = document.getElementById('selectSchematicPreset').value;
+      if (!selected) {
+        alert('Please choose a schematic from the dropdown list first.');
+        return;
+      }
+      loadSchematicByName(selected);
+    });
+  }
+
+  const btnSave = document.getElementById('btnSaveSchematic');
+  if (btnSave) {
+    btnSave.addEventListener('click', saveActiveSchematic);
+  }
+
+  const btnDelete = document.getElementById('btnDeleteSchematic');
+  if (btnDelete) {
+    btnDelete.addEventListener('click', () => {
+      const selected = document.getElementById('selectSchematicPreset').value;
+      if (!selected) {
+        alert('Please choose a schematic to delete.');
+        return;
+      }
+      deleteSchematicByName(selected);
+    });
+  }
+
+  const btnExport = document.getElementById('btnExportSchematic');
+  if (btnExport) {
+    btnExport.addEventListener('click', exportSchematicToJSON);
+  }
+
+  const btnImport = document.getElementById('btnImportSchematic');
+  const btnImportFile = document.getElementById('btnImportFile');
+  if (btnImport && btnImportFile) {
+    btnImport.addEventListener('click', () => btnImportFile.click());
+    btnImportFile.addEventListener('change', importSchematicFromJSON);
+  }
+
+  // Initialize data loads
+  initComponentLibrary();
+  updateSchematicsDropdown();
 
   dashboardRouter.init();
 

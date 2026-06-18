@@ -124,9 +124,17 @@ class CanvasEngine {
     this.drawLinks();
   }
 
-  addNode(type, name, x, y, properties = {}) {
-    this.nodeCounter++;
-    const id = `node_${type}_${this.nodeCounter}`;
+  addNode(type, name, x, y, properties = {}, id = null) {
+    if (!id) {
+      this.nodeCounter++;
+      id = `node_${type}_${this.nodeCounter}`;
+    } else {
+      const parts = id.split('_');
+      const num = parseInt(parts[parts.length - 1]);
+      if (!isNaN(num)) {
+        this.nodeCounter = Math.max(this.nodeCounter, num);
+      }
+    }
     
     // Core parameters based on type
     const defaultProps = {
@@ -365,8 +373,8 @@ class CanvasEngine {
     if (!node) return { x: 0, y: 0 };
     
     // Approx relative position of port dot
-    const nodeWidth = 170; // min-width + padding
-    const nodeHeight = 65;
+    const nodeWidth = 180; // min-width + padding (matches CSS)
+    const nodeHeight = 80;  // matches CSS min-height
     
     if (portType === 'output') {
       return { x: node.x + nodeWidth, y: node.y + nodeHeight / 2 };

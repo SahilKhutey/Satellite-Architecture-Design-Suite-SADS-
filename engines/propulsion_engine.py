@@ -4,7 +4,7 @@ Tsiolkovsky rocket equation, fuel budgets, thrust calculations.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import List, Dict, Any
 import math
 
 
@@ -19,6 +19,7 @@ class Thruster:
     mass_kg: float = 0.0
     prop_type: str = "monopropellant"
     pulse_mode: bool = False
+    power_w: float = 0.0
 
     def exhaust_velocity(self) -> float:
         return self.isp_s * G0
@@ -88,7 +89,22 @@ class PropulsionSystem:
             return 0.0
         return m_p / mdot
 
-    def report(self) -> Dict[str, float]:
+    def propellant_match_check(self) -> bool:
+        if not self.thrusters or not self.tanks:
+            return True
+        for t in self.thrusters:
+            for tk in self.tanks:
+                t_lower = t.name.lower()
+                tk_lower = tk.name.lower()
+                if "ion" in t_lower or "hall" in t_lower or "bolt" in t_lower:
+                    if "xenon" not in tk_lower and "gas" not in tk_lower:
+                        return False
+                elif "monoprop" in t_lower or "fire" in t_lower or "thruster" in t_lower:
+                    if "hydrazine" not in tk_lower and "fuel" not in tk_lower:
+                        return False
+        return True
+
+    def report(self) -> Dict[str, Any]:
         return {
             "total_delta_v_m_s": self.total_delta_v(),
             "average_isp_s": self.average_isp(),
@@ -98,6 +114,8 @@ class PropulsionSystem:
             "burn_time_s": self.burn_time(),
             "dry_mass_kg": self.dry_mass_kg,
             "wet_mass_kg": self.dry_mass_kg + self.total_propellant_available(),
+            "propellant_match_ok": self.propellant_match_check(),
+            "total_power_w": float(sum(t.power_w for t in self.thrusters)),
         }
 
 

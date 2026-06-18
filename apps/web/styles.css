@@ -476,6 +476,7 @@ body.light-theme .btn-primary {
   border-bottom: 1px solid var(--border-color);
   backdrop-filter: blur(20px);
   padding: 0 8px;
+  flex-shrink: 0;
 }
 
 .tab-btn {
@@ -547,7 +548,8 @@ body.light-theme .btn-primary {
 
 /* 2D Grid Canvas Designer */
 .canvas-container {
-  flex: 1;
+  width: 100%;
+  height: 100%;
   position: relative;
   overflow: hidden;
   cursor: grab;
@@ -601,6 +603,10 @@ body.light-theme .canvas-container {
   border: 1px solid var(--border-color);
   border-radius: 10px;
   min-width: 180px;
+  min-height: 80px;
+  height: auto;
+  display: flex;
+  flex-direction: column;
   padding: 0;
   box-shadow: 0 10px 25px -10px rgba(15, 23, 42, 0.15);
   backdrop-filter: blur(12px);
@@ -1295,7 +1301,7 @@ body.light-theme #cosimSignoffLog {
   gap: 16px;
   padding: 20px;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -1306,6 +1312,10 @@ body.light-theme #cosimSignoffLog {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.dashboard-header {
+  flex-shrink: 0;
 }
 
 .dashboard-header h2 {
@@ -1377,6 +1387,7 @@ body.light-theme #cosimSignoffLog {
   display: grid;
   gap: 16px;
   flex: 1;
+  min-height: 0;
 }
 
 .grid-2x2 {
@@ -1385,6 +1396,18 @@ body.light-theme #cosimSignoffLog {
 
 .grid-1x2 {
   grid-template-columns: 2fr 1.1fr;
+}
+
+@media (min-width: 1025px) {
+  .dashboard-grid {
+    height: 100%;
+  }
+  .grid-2x2 {
+    grid-template-rows: repeat(2, 1fr);
+  }
+  .grid-1x2 {
+    grid-template-rows: 1fr;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -1398,6 +1421,8 @@ body.light-theme #cosimSignoffLog {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1666,6 +1691,9 @@ body.light-theme #cosimSignoffLog {
 /* Tables scroll fix */
 .table-container {
   overflow-x: auto;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .badge {
@@ -1678,6 +1706,11 @@ body.light-theme #cosimSignoffLog {
 .badge.bg-green {
   background: rgba(22, 163, 74, 0.15);
   color: var(--accent-green);
+}
+
+.badge.bg-red {
+  background: rgba(220, 38, 38, 0.15);
+  color: #ef4444;
 }
 
 .badge.bg-cyan {
@@ -1706,6 +1739,7 @@ body.light-theme #cosimSignoffLog {
   margin-bottom: 16px;
   overflow-x: auto;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .sub-tab {
@@ -1737,7 +1771,17 @@ body.light-theme #cosimSignoffLog {
 }
 
 .subpage-view {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   animation: fadeIn 0.2s ease-out;
+}
+
+.subpage-view.active {
+  display: flex !important;
 }
 
 .subpage-view.hidden {
@@ -1750,4 +1794,58 @@ body.light-theme #cosimSignoffLog {
   background: #020617;
   border-radius: 6px;
   border: 1px solid var(--border-color);
+}
+
+/* Scrolling wrappers inside card items */
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.comments-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-input);
+  padding: 10px;
+  border-radius: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  height: auto !important;
+}
+
+.copilot-log {
+  flex: 1;
+  min-height: 0 !important;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Telemetry Charts Fitting */
+.telemetry-chart {
+  flex: 1;
+  min-height: 0;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }

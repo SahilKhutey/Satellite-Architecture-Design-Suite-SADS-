@@ -16,7 +16,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=1.0.2">
 </head>
 <body class="light-theme">
   <div id="app" class="app-container">
@@ -423,8 +423,23 @@
             <h2>2D Subsystem Architecture Designer</h2>
           </div>
           <div class="canvas-toolbar">
-            <button id="btnClearCanvas" class="btn btn-icon" title="Clear Canvas"><i class="fa-solid fa-trash-can"></i></button>
-            <button id="btnAutoLayout" class="btn btn-icon" title="Auto Layout"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+            <div class="toolbar-left" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <button id="btnClearCanvas" class="btn btn-icon" title="Clear Canvas"><i class="fa-solid fa-trash-can"></i></button>
+              <button id="btnAutoLayout" class="btn btn-icon" title="Auto Layout"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+              <div class="divider" style="width: 1px; height: 20px; background: var(--border-color); margin: 0 4px;"></div>
+              
+              <!-- Schematic Dataset Operations -->
+              <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary);">Schematic:</span>
+              <select id="selectSchematicPreset" class="btn" style="padding: 4px 8px; height: 32px; font-size: 12px; min-width: 140px; background: rgba(15, 23, 42, 0.6); color: var(--text-primary); border-radius: 6px; border: 1px solid var(--border-color);">
+                <option value="">-- Choose Schematic --</option>
+              </select>
+              <button id="btnLoadSchematic" class="btn btn-icon" style="height: 32px; padding: 0 10px; border-radius: 6px;" title="Load schematic from backend"><i class="fa-solid fa-folder-open text-cyan"></i> Load</button>
+              <button id="btnSaveSchematic" class="btn btn-icon" style="height: 32px; padding: 0 10px; border-radius: 6px;" title="Save current schematic to backend"><i class="fa-solid fa-floppy-disk text-green"></i> Save</button>
+              <button id="btnDeleteSchematic" class="btn btn-icon" style="height: 32px; padding: 0 10px; border-radius: 6px;" title="Delete schematic from backend"><i class="fa-solid fa-trash text-red"></i> Delete</button>
+              <button id="btnExportSchematic" class="btn btn-icon" style="height: 32px; padding: 0 10px; border-radius: 6px;" title="Export schematic to JSON file"><i class="fa-solid fa-download"></i> Export</button>
+              <button id="btnImportSchematic" class="btn btn-icon" style="height: 32px; padding: 0 10px; border-radius: 6px;" title="Import schematic from JSON file"><i class="fa-solid fa-upload"></i> Import</button>
+              <input type="file" id="btnImportFile" style="display:none;" accept=".json">
+            </div>
             <div class="zoom-controls">
               <button id="btnZoomOut" class="btn btn-icon"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
               <span id="zoomPercent">100%</span>
@@ -460,14 +475,17 @@
                 <!-- Propulsion -->
                 <div class="comp-group">
                   <div class="group-header">Propulsion</div>
-                  <div class="drag-item" draggable="true" data-type="thruster" data-thrust="0.5" data-isp="220" data-mass="1.0">
+                  <div class="drag-item" draggable="true" data-type="thruster" data-thrust="0.5" data-isp="220" data-mass="1.0" data-power="5">
                     <i class="fa-solid fa-fire text-red"></i> Monoprop Thruster (0.5N)
                   </div>
-                  <div class="drag-item" draggable="true" data-type="thruster" data-thrust="0.08" data-isp="1650" data-mass="5.0">
+                  <div class="drag-item" draggable="true" data-type="thruster" data-thrust="0.08" data-isp="1650" data-mass="5.0" data-power="150">
                     <i class="fa-solid fa-bolt text-purple"></i> Hall Effect Ion Engine
                   </div>
-                  <div class="drag-item" draggable="true" data-type="tank" data-mass="2.0">
+                  <div class="drag-item" draggable="true" data-type="tank" data-mass="10.0">
                     <i class="fa-solid fa-circle-nodes text-purple"></i> Hydrazine Fuel Tank (10L)
+                  </div>
+                  <div class="drag-item" draggable="true" data-type="tank" data-mass="5.0">
+                    <i class="fa-solid fa-circle-nodes text-cyan"></i> Xenon Gas Tank (5kg)
                   </div>
                 </div>
                 <!-- ADCS -->
@@ -671,6 +689,7 @@
             <button class="sub-tab active" data-subpage="thermal-model"><i class="fa-solid fa-temperature-three-quarters"></i> Thermal Model</button>
             <button class="sub-tab" data-subpage="thermal-hot"><i class="fa-solid fa-fire text-red"></i> Hot Case</button>
             <button class="sub-tab" data-subpage="thermal-cold"><i class="fa-solid fa-snowflake text-cyan"></i> Cold Case</button>
+            <button class="sub-tab" data-subpage="thermal-transient"><i class="fa-solid fa-clock"></i> Transient Solver</button>
             <button class="sub-tab" data-subpage="thermal-networks"><i class="fa-solid fa-network-wired"></i> Thermal Networks</button>
           </div>
 
@@ -719,6 +738,48 @@
               <div class="vitals-table" style="margin-top: 15px;">
                 <div class="vital-row"><span class="lbl">Battery Node (Heater Active)</span> <span class="val text-green">14.1°C (Limit: 5°C)</span></div>
                 <div class="vital-row"><span class="lbl">Propellant Tank Node</span> <span class="val text-green">11.8°C (Limit: 0°C)</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Transient Solver Subpage -->
+          <div class="subpage-view" id="thermal-transient" style="display:none;">
+            <div class="dashboard-grid grid-1x2">
+              <div class="glass-panel card-item flex-column" style="gap: 12px; overflow-y: auto;">
+                <h3><i class="fa-solid fa-clock text-purple"></i> Transient Thermal Configuration</h3>
+                <p class="text-muted" style="font-size: 11px;">Simulate transient heat flow along structural boom elements using 1D Finite Difference (FTCS).</p>
+                <div class="properties-form">
+                  <div class="form-row">
+                    <label for="transientLength">Rod Length (m)</label>
+                    <input id="transientLength" type="number" value="2.0" step="0.5">
+                  </div>
+                  <div class="form-row">
+                    <label for="transientDiffusivity">Thermal Diffusivity (m²/s)</label>
+                    <input id="transientDiffusivity" type="number" value="0.0000687" step="0.000001" style="font-family: monospace;">
+                  </div>
+                  <div class="form-row">
+                    <label for="transientInitTemp">Init Temperature (K)</label>
+                    <input id="transientInitTemp" type="number" value="293" step="5">
+                  </div>
+                  <div class="form-row">
+                    <label for="transientBoundLeft">Left Boundary Temp (K)</label>
+                    <input id="transientBoundLeft" type="number" value="300" step="5">
+                  </div>
+                  <div class="form-row">
+                    <label for="transientBoundRight">Right Boundary Temp (K)</label>
+                    <input id="transientBoundRight" type="number" value="250" step="5">
+                  </div>
+                  <button id="btnRunTransientThermal" class="btn btn-primary" style="margin-top: 15px; width: 100%; justify-content: center;">
+                    <i class="fa-solid fa-play"></i> Run Transient Solver
+                  </button>
+                </div>
+              </div>
+              <div class="glass-panel card-item flex-column" style="min-height: 250px;">
+                <h3><i class="fa-solid fa-chart-line text-cyan"></i> Temperature Distribution over Time</h3>
+                <div style="flex: 1; min-height: 0; position: relative;">
+                  <canvas id="chartThermalTransient" class="telemetry-chart"></canvas>
+                </div>
+                <div id="transientStatusMsg" class="text-muted" style="font-size: 11px; margin-top: 8px; text-align: center;">Ready to run simulation</div>
               </div>
             </div>
           </div>
@@ -824,10 +885,10 @@
               <div class="glass-panel card-item" id="DeltaVBudget">
                 <h3><i class="fa-solid fa-oil-can text-cyan"></i> Fuel & Thruster Status</h3>
                 <div class="summary-details" style="margin-bottom: 20px;">
-                  <p><strong>Active Thruster:</strong> Aerojet MR-103 Monopropellant</p>
-                  <p><strong>Thrust Level:</strong> 0.5 N</p>
-                  <p><strong>Specific Impulse (Isp):</strong> 220 seconds</p>
-                  <p><strong>Propellant Tank Level:</strong> 98.4% (Hydrazine)</p>
+                  <p><strong>Active Thruster:</strong> <span id="propActiveThruster">None configured</span></p>
+                  <p><strong>Thrust Level:</strong> <span id="propThrustLevel">0.0 N</span></p>
+                  <p><strong>Specific Impulse (Isp):</strong> <span id="propIsp">0 seconds</span></p>
+                  <p><strong>Propellant Tank Level:</strong> <span id="propTankLevel">0.0%</span></p>
                 </div>
                 <h3><i class="fa-solid fa-gauge-high text-red"></i> Delta-V Budget Allocation</h3>
                 <div class="table-container">
@@ -835,21 +896,19 @@
                     <thead>
                       <tr><th>Maneuver</th><th>delta-V Required</th><th>Fuel Required</th></tr>
                     </thead>
-                    <tbody>
-                      <tr><td>Orbit Raising (50km)</td><td>25.8 m/s</td><td>1.2 kg</td></tr>
-                      <tr><td>Station Keeping (5 yrs)</td><td>45.0 m/s</td><td>2.1 kg</td></tr>
-                      <tr><td>Deorbit Maneuver</td><td>85.0 m/s</td><td>4.2 kg</td></tr>
+                    <tbody id="propManeuverTableBody">
+                      <tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">Add thruster and tank elements to active design to compute budget.</td></tr>
                     </tbody>
                   </table>
                 </div>
               </div>
               <div class="glass-panel card-item" id="ReserveMarginPanel">
                 <h3><i class="fa-solid fa-chart-line text-purple"></i> Propellant Consumption Estimates</h3>
-                <p class="text-muted" style="font-size:11px;">Expected station keeping lifetime: 7.2 years with existing fuel margins.</p>
+                <p id="propLifetimeText" class="text-muted" style="font-size:11px;">Expected station keeping lifetime: -- years with existing fuel margins.</p>
                 <div class="progress-card" style="margin-top: 15px;">
-                  <span class="label">Hydrazine Fuel Reserve</span>
-                  <div class="progress-bar-bg"><div class="progress-bar-fill bg-cyan" style="width: 98.4%;"></div></div>
-                  <span class="val">9.84 kg remaining (98.4%)</span>
+                  <span id="propFuelReserveLabel" class="label">Hydrazine Fuel Reserve</span>
+                  <div class="progress-bar-bg"><div id="propFuelFill" class="progress-bar-fill bg-cyan" style="width: 0%;"></div></div>
+                  <span id="propFuelLabel" class="val">0.00 kg remaining (0.0%)</span>
                 </div>
               </div>
             </div>
@@ -959,7 +1018,10 @@
           <div class="subpage-view active" id="orbit-design">
             <div class="dashboard-grid grid-1x2">
               <div class="glass-panel card-item flex-column" id="TrajectoryViewer">
-                <h3><i class="fa-solid fa-globe text-cyan"></i> 3D Globe Orbit View</h3>
+                <h3>
+                  <i class="fa-solid fa-globe text-cyan"></i> 3D Globe Orbit View
+                  <span id="telemetryContactStatus" class="badge bg-red" style="float: right;">NO CONTACT</span>
+                </h3>
                 <div class="orbit-mount-point-container">
                   <div class="orbit-viewer-mount"></div>
                 </div>
@@ -997,12 +1059,46 @@
 
           <!-- Orbit Propagation Subpage -->
           <div class="subpage-view" id="orbit-prop" style="display:none;">
-            <div class="glass-panel card-item">
-              <h3><i class="fa-solid fa-route text-cyan"></i> Trajectory Propagator Solver</h3>
-              <p class="text-muted" style="font-size: 11px;">Simulating solar radiation pressure, Earth J2 perturbation, and atmospheric drag.</p>
-              <div class="activity-list" style="margin-top: 15px;">
-                <div class="activity-item"><span class="badge bg-green">SOLVED</span> <span>J2 nodal drift calculation completed</span></div>
-                <div class="activity-item"><span class="badge bg-green">SOLVED</span> <span>Atmospheric drag altitude decay: 0.12m/day</span></div>
+            <div class="dashboard-grid grid-1x2">
+              <div class="glass-panel card-item flex-column" style="gap: 12px; overflow-y: auto;">
+                <h3><i class="fa-solid fa-route text-cyan"></i> Trajectory Propagator</h3>
+                <p class="text-muted" style="font-size: 11px; margin-bottom: 5px;">Numerical propagation using Dormand-Prince (RK45) integrating Earth J2 oblateness and atmospheric drag.</p>
+                <div class="properties-form">
+                  <div class="form-row">
+                    <label>Spacecraft Mass (kg)</label>
+                    <input id="orbitPropMass" type="number" value="150" step="10">
+                  </div>
+                  <div class="form-row">
+                    <label>Drag Area (m²)</label>
+                    <input id="orbitPropArea" type="number" value="2.0" step="0.5">
+                  </div>
+                  <div class="form-row">
+                    <label>Drag Coeff (Cd)</label>
+                    <input id="orbitPropCd" type="number" value="2.2" step="0.1">
+                  </div>
+                  <div class="form-row">
+                    <label>Number of Orbits</label>
+                    <input id="orbitPropOrbits" type="number" value="2" step="1">
+                  </div>
+                  <div class="form-row" style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
+                    <input id="orbitPropPerturb" type="checkbox" checked style="width: auto; margin: 0;">
+                    <label for="orbitPropPerturb" style="margin: 0; user-select: none;">Enable J2 & Drag Perturbations</label>
+                  </div>
+                  <button id="btnRunOrbitPropagation" class="btn btn-primary" style="margin-top: 15px; width: 100%; justify-content: center;">
+                    <i class="fa-solid fa-play"></i> Run Trajectory Propagation
+                  </button>
+                </div>
+                <div id="orbitPropReportPanel" class="activity-list" style="margin-top: 10px; display: none;">
+                  <div class="activity-item"><span class="badge bg-green">DECAY RATE</span> <span id="orbitPropReportDecay">Decay: --</span></div>
+                  <div class="activity-item"><span class="badge bg-green">J2 NODAL DRIFT</span> <span id="orbitPropReportDrift">J2 Drift: --</span></div>
+                </div>
+              </div>
+              <div class="glass-panel card-item flex-column" style="min-height: 250px;">
+                <h3><i class="fa-solid fa-chart-line text-green"></i> Altitude Decay Profile</h3>
+                <div style="flex: 1; min-height: 0; position: relative;">
+                  <canvas id="chartOrbitDecay" class="telemetry-chart"></canvas>
+                </div>
+                <div id="orbitPropStatusMsg" class="text-muted" style="font-size: 11px; margin-top: 8px; text-align: center;">Ready to run simulation</div>
               </div>
             </div>
           </div>
@@ -1136,7 +1232,7 @@
                 <div class="check-item checked"><i class="fa-solid fa-square-check"></i> Maximize Eclipse Energy Reserves (Wh)</div>
                 <div class="check-item"><i class="fa-solid fa-square"></i> Minimize Antenna Surface Area</div>
               </div>
-              <button class="btn btn-primary" onclick="alert('Trade study started')" style="margin-top: 24px; width: 100%; justify-content: center;">
+              <button id="btnRunTradeStudy" class="btn btn-primary" style="margin-top: 24px; width: 100%; justify-content: center;">
                 <i class="fa-solid fa-rotate"></i> Run Trade-Study Optimization
               </button>
             </div>
@@ -1506,7 +1602,7 @@
   <!-- Global Shared Viewers Storage Area -->
   <div id="globalSharedViewers" style="display: none;">
     <!-- 2D Canvas Designer -->
-    <div id="canvasContainer">
+    <div id="canvasContainer" class="canvas-container">
       <svg id="canvasSvg"></svg>
       <div id="canvasDomLayer"></div>
     </div>
@@ -1517,9 +1613,9 @@
   </div>
 
   <!-- Custom Scripts -->
-  <script src="canvas_engine.js"></script>
-  <script src="viewer_3d.js"></script>
-  <script src="orbit_viewer.js"></script>
-  <script src="app.js"></script>
+  <script src="canvas_engine.js?v=1.0.2"></script>
+  <script src="viewer_3d.js?v=1.0.2"></script>
+  <script src="orbit_viewer.js?v=1.0.2"></script>
+  <script src="app.js?v=1.0.2"></script>
 </body>
 </html>

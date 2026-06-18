@@ -16,7 +16,17 @@ class OrbitViewer {
     this.satMesh = null;
     this.shadowMesh = null;
     
-    // Orbital propagation parameters
+    // Advanced visualization elements
+    this.groundStationMesh = null;
+    this.laserLine = null;
+    this.gsLat = 37.7749; // San Francisco default
+    this.gsLon = -122.4194;
+    
+    this.propagatedPathPoints = null;
+    this.pathStepIdx = 0;
+    this.useLiveTelemetry = false;
+    
+    // Orbital propagation parameters (for fallback circular path)
     this.orbitRadius = 1.4; // relative to Earth radius = 1.0
     this.angle = 0;
     this.speed = 0.005;
@@ -80,6 +90,31 @@ class OrbitViewer {
     const earthGrid = new THREE.Mesh(gridGeo, gridMat);
     this.earth.add(earthGrid);
 
+    // Add Ground Station Mesh
+    const gsGeo = new THREE.ConeGeometry(0.04, 0.1, 16);
+    gsGeo.rotateX(Math.PI / 2);
+    const gsMat = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+    this.groundStationMesh = new THREE.Mesh(gsGeo, gsMat);
+    
+    const gsLatRad = THREE.MathUtils.degToRad(this.gsLat);
+    const gsLonRad = THREE.MathUtils.degToRad(this.gsLon);
+    this.groundStationMesh.position.set(
+      Math.cos(gsLatRad) * Math.cos(gsLonRad),
+      Math.sin(gsLatRad),
+      Math.cos(gsLatRad) * Math.sin(gsLonRad)
+    );
+    this.groundStationMesh.lookAt(new THREE.Vector3(0, 0, 0));
+    this.groundStationMesh.rotateX(Math.PI / 2);
+    this.earth.add(this.groundStationMesh);
+
+    // Add Laser Beam Line
+    const laserMat = new THREE.LineBasicMaterial({ color: 0x34c759, linewidth: 2, transparent: true, opacity: 0.8 });
+    const laserPoints = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)];
+    const laserGeo = new THREE.BufferGeometry().setFromPoints(laserPoints);
+    this.laserLine = new THREE.Line(laserGeo, laserMat);
+    this.laserLine.visible = false;
+    this.scene.add(this.laserLine);
+
     // Shadow Cone (Earth shadow cylinder in -X direction)
     const shadowGeo = new THREE.CylinderGeometry(1.0, 1.0, 10.0, 32);
     shadowGeo.rotateZ(Math.PI / 2);
@@ -102,13 +137,15 @@ class OrbitViewer {
     this.scene.add(this.satMesh);
 
     // Add orbit line
-    this.updateOrbitPath(600); // Default LEO altitude (relative units will be set)
+    this.updateOrbitPath(600); // Default LEO altitude
 
     // Window resize
     window.addEventListener('resize', () => this.onWindowResize());
   }
 
   updateOrbitPath(altitudeKm) {
+    this.propagatedPathPoints = null; // Reset solver path
+    this.useLiveTelemetry = false;
     if (this.orbitLine) this.scene.remove(this.orbitLine);
 
     // Calculate scale factor relative to Earth radius R = 6378 km
@@ -141,6 +178,73 @@ class OrbitViewer {
     }
   }
 
+  updatePositionFromLatLon(latDeg, lonDeg, altKm) {
+    this.useLiveTelemetry = true;
+    this.propagatedPathPoints = null;
+    
+    const lat = THREE.MathUtils.degToRad(latDeg);
+    const lon = THREE.MathUtils.degToRad(lonDeg);
+    
+    const R_E = 6378.137;
+    const r = (R_E + altKm) / R_E;
+    this.orbitRadius = r;
+    
+    this.satMesh.position.set(
+      r * Math.cos(lat) * Math.cos(lon),
+      r * Math.sin(lat),
+      r * Math.cos(lat) * Math.sin(lon)
+    );
+  }
+
+  drawPropagatedPath(history) {
+    this.useLiveTelemetry = false;
+    if (this.orbitLine) this.scene.remove(this.orbitLine);
+    
+    const points = [];
+    const R_E = 6378.137;
+    for (const step of history) {
+      const pos = step.position;
+      points.push(new THREE.Vector3(pos[0] / R_E, pos[2] / R_E, pos[1] / R_E)); // Swapped coordinates to match Y-up coordinate system
+    }
+    
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({
+      color: 0x10b981,
+      transparent: true,
+      opacity: 0.6
+    });
+    
+    this.orbitLine = new THREE.Line(geometry, material);
+    this.scene.add(this.orbitLine);
+    
+    this.propagatedPathPoints = points;
+    this.pathStepIdx = 0;
+  }
+
+  updateLaser() {
+    if (!this.groundStationMesh || !this.satMesh || !this.laserLine) return;
+    
+    const gsWorldPos = new THREE.Vector3();
+    this.groundStationMesh.getWorldPosition(gsWorldPos);
+    
+    const satPos = this.satMesh.position;
+    
+    const earthToGs = gsWorldPos.clone().normalize();
+    const gsToSat = new THREE.Vector3().subVectors(satPos, gsWorldPos);
+    
+    const dot = earthToGs.dot(gsToSat.clone().normalize());
+    const hasLos = dot > 0.087; // elevation angle > 5 degrees
+    
+    if (hasLos) {
+      const points = [gsWorldPos, satPos];
+      this.laserLine.geometry.setFromPoints(points);
+      this.laserLine.visible = true;
+      this.laserLine.material.color.setHex(0x34c759); // Green laser
+    } else {
+      this.laserLine.visible = false;
+    }
+  }
+
   setSpeed(val) {
     this.speed = 0.002 * val;
   }
@@ -162,8 +266,6 @@ class OrbitViewer {
   }
 
   checkEclipse() {
-    // Eclipse occurs when satellite is behind Earth relative to Sun (+X direction)
-    // So if sat.x < -0.2 and sat.y^2 + sat.z^2 < 1.0 (inside shadow cylinder)
     const x = this.satMesh.position.x;
     const y = this.satMesh.position.y;
     const z = this.satMesh.position.z;
@@ -179,16 +281,24 @@ class OrbitViewer {
     requestAnimationFrame(() => this.animate());
 
     if (!this.isPaused) {
-      this.angle += this.speed;
-      if (this.angle > Math.PI * 2) this.angle -= Math.PI * 2;
-      
-      // Update satellite position
-      this.satMesh.position.set(
-        Math.cos(this.angle) * this.orbitRadius,
-        0,
-        Math.sin(this.angle) * this.orbitRadius
-      );
+      if (this.propagatedPathPoints && this.propagatedPathPoints.length > 0) {
+        this.pathStepIdx = (this.pathStepIdx + 1) % this.propagatedPathPoints.length;
+        const pt = this.propagatedPathPoints[this.pathStepIdx];
+        this.satMesh.position.copy(pt);
+      } else if (!this.useLiveTelemetry) {
+        this.angle += this.speed;
+        if (this.angle > Math.PI * 2) this.angle -= Math.PI * 2;
+        
+        this.satMesh.position.set(
+          Math.cos(this.angle) * this.orbitRadius,
+          0,
+          Math.sin(this.angle) * this.orbitRadius
+        );
+      }
     }
+
+    // Update laser line
+    this.updateLaser();
 
     // Slowly rotate Earth
     if (this.earth) {
@@ -199,3 +309,4 @@ class OrbitViewer {
     this.renderer.render(this.scene, this.camera);
   }
 }
+
